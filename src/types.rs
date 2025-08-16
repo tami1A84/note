@@ -106,10 +106,15 @@ pub struct TimelinePost {
 }
 
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
-pub enum AppTab {
-    Home,
+pub enum ProfileSubView {
+    Profile,
     Relays,
     Wallet,
+}
+
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
+pub enum AppTab {
+    Home,
     Profile,
 }
 
@@ -124,13 +129,6 @@ impl AppTheme {
         match self {
             AppTheme::Light => egui::Color32::from_white_alpha(250),
             AppTheme::Dark => egui::Color32::from_rgb(44, 44, 46),
-        }
-    }
-
-    pub fn text_color(&self) -> egui::Color32 {
-        match self {
-            AppTheme::Light => egui::Color32::BLACK,
-            AppTheme::Dark => egui::Color32::WHITE,
         }
     }
 
@@ -169,6 +167,8 @@ pub struct NostrStatusAppInternal {
     pub should_repaint: bool,
     pub is_loading: bool,
     pub current_tab: AppTab,
+    pub current_profile_sub_view: ProfileSubView,
+    pub selected_label: Option<String>,
     pub connected_relays_display: String,
     pub nip01_profile_display: String,
     pub editable_profile: ProfileMetadata,

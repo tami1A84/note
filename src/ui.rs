@@ -19,9 +19,6 @@ impl eframe::App for NostrStatusApp {
         let mut app_data = self.data.lock().unwrap();
 
         let home_tab_text = "ホーム";
-        let relays_tab_text = "リレー";
-        let wallet_tab_text = "ウォレット";
-        let profile_tab_text = "プロフィール";
 
         // app_data_arc をクローンして非同期タスクに渡す
         let app_data_arc_clone = self.data.clone();
@@ -38,7 +35,7 @@ impl eframe::App for NostrStatusApp {
                 ui.add_space(5.0);
 
                 ui.horizontal(|ui| {
-                    ui.heading("なう");
+                    ui.heading("長文ノート");
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         let (icon, new_theme) = match app_data.current_theme {
                             AppTheme::Light => ("☀️", AppTheme::Dark),
@@ -58,25 +55,26 @@ impl eframe::App for NostrStatusApp {
                 ui.add_space(15.0);
 
                 ui.with_layout(egui::Layout::top_down_justified(egui::Align::LEFT), |ui| {
-                    ui.style_mut().spacing.item_spacing.y = 12.0; // ボタン間の垂直スペース
+                    ui.style_mut().spacing.item_spacing.y = 12.0;
 
                     ui.selectable_value(&mut app_data.current_tab, AppTab::Home, home_tab_text);
-                    if app_data.is_logged_in {
-                        ui.selectable_value(
-                            &mut app_data.current_tab,
-                            AppTab::Relays,
-                            relays_tab_text,
-                        );
-                        ui.selectable_value(
-                            &mut app_data.current_tab,
-                            AppTab::Wallet,
-                            wallet_tab_text,
-                        );
-                        ui.selectable_value(
-                            &mut app_data.current_tab,
-                            AppTab::Profile,
-                            profile_tab_text,
-                        );
+
+                    ui.add_space(15.0);
+                    ui.label(egui::RichText::new("ラベル一覧").strong());
+                    ui.add_space(10.0);
+
+                    // Placeholder labels
+                    let labels = vec!["すべて", "テクノロジー", "音楽", "Rust", "Nostr"];
+                    for label in labels {
+                        let is_selected = app_data.selected_label == Some(label.to_string());
+                        if ui.selectable_label(is_selected, label).clicked() {
+                            if is_selected {
+                                // If clicked again, deselect
+                                app_data.selected_label = None;
+                            } else {
+                                app_data.selected_label = Some(label.to_string());
+                            }
+                        }
                     }
                 });
 
@@ -98,8 +96,33 @@ impl eframe::App for NostrStatusApp {
         egui::CentralPanel::default()
             .frame(panel_frame)
             .show(ctx, |ui| {
+                // NEW Top Panel for profile icon menu
+                egui::TopBottomPanel::top("top_panel")
+                    .frame(egui::Frame::default().inner_margin(Margin::symmetric(10, 5)))
+                    .show_inside(ui, |ui| {
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            if app_data.is_logged_in {
+                                ui.menu_button("👤", |ui| {
+                                    if ui.button("Profile").clicked() {
+                                        app_data.current_tab = AppTab::Profile;
+                                        app_data.current_profile_sub_view = ProfileSubView::Profile;
+                                        ui.close();
+                                    }
+                                    if ui.button("Relays").clicked() {
+                                        app_data.current_tab = AppTab::Profile;
+                                        app_data.current_profile_sub_view = ProfileSubView::Relays;
+                                        ui.close();
+                                    }
+                                    if ui.button("Wallet").clicked() {
+                                        app_data.current_tab = AppTab::Profile;
+                                        app_data.current_profile_sub_view = ProfileSubView::Wallet;
+                                        ui.close();
+                                    }
+                                });
+                            }
+                        });
+                    });
 
-            // ui.add_enabled_ui(!app_data.is_loading, |ui| { // この行を削除
                 if !app_data.is_logged_in {
                     if app_data.current_tab == AppTab::Home {
                         login_view::draw_login_view(ui, &mut app_data, app_data_arc_clone, runtime_handle);
@@ -109,18 +132,23 @@ impl eframe::App for NostrStatusApp {
                         AppTab::Home => {
                             home_view::draw_home_view(ui, ctx, &mut app_data, app_data_arc_clone, runtime_handle);
                         },
-                        AppTab::Relays => {
-                           relays_view::draw_relays_view(ui, &mut app_data, app_data_arc_clone, runtime_handle);
-                        },
-                        AppTab::Wallet => {
-                            wallet_view::draw_wallet_view(ui, &mut app_data, app_data_arc_clone, runtime_handle);
-                        },
                         AppTab::Profile => {
-                            profile_view::draw_profile_view(ui, ctx, &mut app_data, app_data_arc_clone, runtime_handle);
+                            // NEW: Sub-view matching
+                            match app_data.current_profile_sub_view {
+                                ProfileSubView::Profile => {
+                                    profile_view::draw_profile_view(ui, ctx, &mut app_data, app_data_arc_clone, runtime_handle);
+                                },
+                                ProfileSubView::Relays => {
+                                    relays_view::draw_relays_view(ui, &mut app_data, app_data_arc_clone, runtime_handle);
+                                },
+                                ProfileSubView::Wallet => {
+                                    wallet_view::draw_wallet_view(ui, &mut app_data, app_data_arc_clone, runtime_handle);
+                                },
+                            }
                         },
+                        // All cases are handled, no fallback needed
                     }
                 }
-            // }); // この閉じ括弧も削除
         });
 
         // update メソッドの最後に should_repaint をチェックし、再描画をリクエスト
