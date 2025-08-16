@@ -204,6 +204,8 @@ impl NostrStatusApp {
             show_zap_dialog: false,
             zap_amount_input: String::new(),
             zap_target_post: None,
+            viewing_article: None,
+            show_profile_menu: false,
         };
         let data = Arc::new(Mutex::new(app_data_internal));
 
