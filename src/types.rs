@@ -1,4 +1,5 @@
 use eframe::egui;
+use egui_commonmark::CommonMarkCache;
 use nostr::{nips::nip47::NostrWalletConnectURI, PublicKey, Timestamp, Keys, EventId, Kind};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -50,8 +51,6 @@ pub struct ProfileMetadata {
     #[serde(default)]
     pub nip05: String,
     #[serde(default)]
-    pub emojis: Vec<[String; 2]>,
-    #[serde(default)]
     pub lud16: String,
     #[serde(flatten)]
     pub extra: HashMap<String, serde_json::Value>,
@@ -67,7 +66,6 @@ pub struct EditableRelay {
 #[derive(Clone, Copy, Debug)]
 pub enum ImageKind {
     Avatar,
-    Emoji,
     ProfilePicture,
 }
 
@@ -99,8 +97,6 @@ pub struct TimelinePost {
     pub title: String,
     pub content: String,
     pub created_at: Timestamp,
-    #[serde(default)]
-    pub emojis: HashMap<String, String>,
     #[serde(default)]
     pub tags: Vec<nostr::Tag>,
 }
@@ -155,8 +151,6 @@ pub struct NostrStatusAppInternal {
     pub article_title_input: String,
     pub article_content_input: String,
     pub show_post_dialog: bool,
-    pub show_emoji_picker: bool,
-    pub my_emojis: HashMap<String, String>,
     pub secret_key_input: String,
     pub passphrase_input: String,
     pub confirm_passphrase_input: String,
@@ -196,4 +190,5 @@ pub struct NostrStatusAppInternal {
     pub viewing_article: Option<TimelinePost>,
     // UI State
     pub show_profile_menu: bool,
+    pub commonmark_cache: CommonMarkCache,
 }
