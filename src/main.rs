@@ -181,6 +181,8 @@ impl NostrStatusApp {
             should_repaint: false,
             is_loading: false,
             current_tab: AppTab::Home,
+            current_profile_sub_view: ProfileSubView::Profile,
+            selected_label: None,
             connected_relays_display: String::new(),
             nip01_profile_display: String::new(), // ここを初期化
             editable_profile: ProfileMetadata::default(), // 編集可能なプロファイルデータ
