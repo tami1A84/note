@@ -116,6 +116,7 @@ pub enum ProfileSubView {
 pub enum AppTab {
     Home,
     Profile,
+    ArticleView,
 }
 
 #[derive(Debug, PartialEq, Eq, Copy, Clone, Serialize, Deserialize)]
@@ -191,4 +192,8 @@ pub struct NostrStatusAppInternal {
     pub show_zap_dialog: bool,
     pub zap_amount_input: String,
     pub zap_target_post: Option<TimelinePost>,
+    // Article View
+    pub viewing_article: Option<TimelinePost>,
+    // UI State
+    pub show_profile_menu: bool,
 }

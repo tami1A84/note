@@ -6,7 +6,6 @@ use nostr::{EventBuilder, Kind, nips::nip19::ToBech32};
 use crate::{
     cache_db::DB_PROFILES,
     types::*,
-    ui::image_cache,
 };
 
 pub fn draw_profile_view(
@@ -15,8 +14,8 @@ pub fn draw_profile_view(
     app_data: &mut NostrStatusAppInternal,
     app_data_arc: Arc<Mutex<NostrStatusAppInternal>>,
     runtime_handle: tokio::runtime::Handle,
+    urls_to_load: &mut Vec<(String, ImageKind)>,
 ) {
-    let mut urls_to_load: Vec<(String, ImageKind)> = Vec::new();
 
     let save_profile_button_text = "プロフィールを保存";
     let logout_button_text = "ログアウト";
@@ -247,84 +246,4 @@ pub fn draw_profile_view(
         });
 
 
-    // --- Image Loading Logic ---
-    let cache_db = app_data.cache_db.clone();
-    let mut still_to_load = Vec::new();
-    for (url_key, kind) in urls_to_load {
-        if let Some(image_bytes) = image_cache::load_from_lmdb(&cache_db, &url_key) {
-            if let Ok(mut dynamic_image) = image::load_from_memory(&image_bytes) {
-                let (width, height) = match kind {
-                    ImageKind::Avatar => (32, 32), // Not used here, but for consistency
-                    ImageKind::Emoji => (20, 20),
-                    ImageKind::ProfilePicture => (100, 100),
-                };
-                dynamic_image = dynamic_image.thumbnail(width, height);
-                let color_image = egui::ColorImage::from_rgba_unmultiplied(
-                    [dynamic_image.width() as usize, dynamic_image.height() as usize],
-                    dynamic_image.to_rgba8().as_flat_samples().as_slice(),
-                );
-                let texture_handle = ctx.load_texture(
-                    &url_key,
-                    color_image,
-                    Default::default()
-                );
-                app_data.image_cache.insert(url_key, ImageState::Loaded(texture_handle));
-            } else {
-                app_data.image_cache.insert(url_key, ImageState::Failed);
-            }
-        } else {
-            still_to_load.push((url_key, kind));
-        }
-    }
-
-    let data_clone = app_data_arc.clone();
-    for (url_key, kind) in still_to_load {
-        app_data.image_cache.insert(url_key.clone(), ImageState::Loading);
-        app_data.should_repaint = true;
-
-        let app_data_clone = data_clone.clone();
-        let ctx_clone = ctx.clone();
-        let cache_db_for_fetch = app_data.cache_db.clone();
-        let request = ehttp::Request::get(&url_key);
-
-        ehttp::fetch(request, move |result| {
-            let new_state = match result {
-                Ok(response) => {
-                    if response.ok {
-                        image_cache::save_to_lmdb(&cache_db_for_fetch, &response.url, &response.bytes);
-
-                        match image::load_from_memory(&response.bytes) {
-                            Ok(mut dynamic_image) => {
-                                let (width, height) = match kind {
-                                    ImageKind::Avatar => (32, 32),
-                                    ImageKind::Emoji => (20, 20),
-                                    ImageKind::ProfilePicture => (100, 100),
-                                };
-                                dynamic_image = dynamic_image.thumbnail(width, height);
-
-                                let color_image = egui::ColorImage::from_rgba_unmultiplied(
-                                    [dynamic_image.width() as usize, dynamic_image.height() as usize],
-                                    dynamic_image.to_rgba8().as_flat_samples().as_slice(),
-                                );
-                                let texture_handle = ctx_clone.load_texture(
-                                    &response.url,
-                                    color_image,
-                                    Default::default()
-                                );
-                                ImageState::Loaded(texture_handle)
-                            }
-                            Err(_) => ImageState::Failed,
-                        }
-                    } else {
-                        ImageState::Failed
-                    }
-                }
-                Err(_) => ImageState::Failed,
-            };
-
-            let mut app_data = app_data_clone.lock().unwrap();
-            app_data.image_cache.insert(url_key, new_state);
-            ctx_clone.request_repaint();
-        });
-    }
 }

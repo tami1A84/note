@@ -7,7 +7,7 @@ use crate::{
     types::*,
     nostr_client::{update_contact_list, fetch_timeline_events},
     cache_db::DB_FOLLOWED,
-    ui::{image_cache, zap},
+    ui::zap,
 };
 
 pub fn draw_home_view(
@@ -16,8 +16,8 @@ pub fn draw_home_view(
     app_data: &mut NostrStatusAppInternal,
     app_data_arc: Arc<Mutex<NostrStatusAppInternal>>,
     runtime_handle: tokio::runtime::Handle,
+    urls_to_load: &mut Vec<(String, ImageKind)>,
 ) {
-    let mut urls_to_load: Vec<(String, ImageKind)> = Vec::new();
     let new_post_window_title_text = "新規投稿";
     let publish_button_text = "公開";
     let cancel_button_text = "キャンセル";
@@ -394,7 +394,7 @@ pub fn draw_home_view(
                                     ..Default::default()
                                 };
 
-                                card_frame.show(ui, |ui| {
+                                let card_response = card_frame.show(ui, |ui| {
                                     ui.set_max_width(250.0);
                                     ui.set_max_height(180.0);
 
@@ -462,99 +462,15 @@ pub fn draw_home_view(
                                         ui.label(snippet);
                                     });
                                 });
+
+                                if card_response.response.interact(egui::Sense::click()).clicked() {
+                                    app_data.viewing_article = Some(post.clone());
+                                    app_data.current_tab = AppTab::ArticleView;
+                                }
                             }
                         }
                     });
                 });
-        }
-
-        // --- Image Loading Logic ---
-
-        // First, try to load images from the LMDB cache for URLs not in memory.
-        let cache_db = app_data.cache_db.clone();
-        let mut still_to_load = Vec::new();
-        for (url_key, kind) in urls_to_load {
-            if let Some(image_bytes) = image_cache::load_from_lmdb(&cache_db, &url_key) {
-                // Image found in cache, process it directly.
-                // This is a simplification; for a smoother UI, this should be async.
-                if let Ok(mut dynamic_image) = image::load_from_memory(&image_bytes) {
-                    let (width, height) = match kind {
-                        ImageKind::Avatar => (32, 32),
-                        ImageKind::Emoji => (20, 20),
-                    _ => (32, 32), // Default for Banner, ProfilePicture, etc.
-                    };
-                    dynamic_image = dynamic_image.thumbnail(width, height);
-                    let color_image = egui::ColorImage::from_rgba_unmultiplied(
-                        [dynamic_image.width() as usize, dynamic_image.height() as usize],
-                        dynamic_image.to_rgba8().as_flat_samples().as_slice(),
-                    );
-                    let texture_handle = ctx.load_texture(
-                        &url_key,
-                        color_image,
-                        Default::default()
-                    );
-                    app_data.image_cache.insert(url_key, ImageState::Loaded(texture_handle));
-                } else {
-                    // Failed to decode, mark as failed.
-                    app_data.image_cache.insert(url_key, ImageState::Failed);
-                }
-            } else {
-                // Not on disk, queue for network download.
-                still_to_load.push((url_key, kind));
-            }
-        }
-
-        // Fetch remaining images from the network.
-        let data_clone = app_data_arc.clone();
-        for (url_key, kind) in still_to_load {
-            app_data.image_cache.insert(url_key.clone(), ImageState::Loading);
-            app_data.should_repaint = true;
-
-            let app_data_clone = data_clone.clone();
-            let ctx_clone = ctx.clone();
-            let cache_db_for_fetch = app_data.cache_db.clone();
-            let request = ehttp::Request::get(&url_key);
-
-            ehttp::fetch(request, move |result| {
-                let new_state = match result {
-                    Ok(response) => {
-                        if response.ok {
-                            // Save to LMDB cache first.
-                            image_cache::save_to_lmdb(&cache_db_for_fetch, &response.url, &response.bytes);
-
-                            match image::load_from_memory(&response.bytes) {
-                                Ok(mut dynamic_image) => {
-                                    let (width, height) = match kind {
-                                        ImageKind::Avatar => (32, 32),
-                                        ImageKind::Emoji => (20, 20),
-                                    _ => (32, 32), // Default for Banner, ProfilePicture, etc.
-                                    };
-                                    dynamic_image = dynamic_image.thumbnail(width, height);
-
-                                    let color_image = egui::ColorImage::from_rgba_unmultiplied(
-                                        [dynamic_image.width() as usize, dynamic_image.height() as usize],
-                                        dynamic_image.to_rgba8().as_flat_samples().as_slice(),
-                                    );
-                                    let texture_handle = ctx_clone.load_texture(
-                                        &response.url,
-                                        color_image,
-                                        Default::default()
-                                    );
-                                    ImageState::Loaded(texture_handle)
-                                }
-                                Err(_) => ImageState::Failed,
-                            }
-                        } else {
-                            ImageState::Failed
-                        }
-                    }
-                    Err(_) => ImageState::Failed,
-                };
-
-                let mut app_data = app_data_clone.lock().unwrap();
-                app_data.image_cache.insert(url_key, new_state);
-                ctx_clone.request_repaint();
-            });
         }
 
         if let Some((pubkey, follow)) = pubkey_to_modify {
