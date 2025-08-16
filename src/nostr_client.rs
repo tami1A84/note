@@ -372,7 +372,7 @@ pub async fn fetch_timeline_events(
 
         let timeline_filter = Filter::new()
             .authors(followed_pubkeys.clone())
-            .kind(Kind::from(30315))
+            .kind(Kind::from(30023)) // Changed to NIP-23 Kind
             .limit(20);
         let status_events = temp_fetch_client
             .fetch_events(timeline_filter, Duration::from_secs(10))
@@ -409,11 +409,21 @@ pub async fn fetch_timeline_events(
                     })
                     .collect();
 
+                // Extract title from 't' tag for NIP-23
+                let title = event.tags.iter().find_map(|tag| {
+                    if let Some(nostr::TagStandard::Title(title)) = tag.as_standardized() {
+                        Some(title.clone())
+                    } else {
+                        None
+                    }
+                }).unwrap_or_default();
+
                 timeline_posts.push(TimelinePost {
                     id: event.id,
                     kind: event.kind,
                     author_pubkey: event.pubkey,
                     author_metadata: profiles.get(&event.pubkey).cloned().unwrap_or_default(),
+                    title, // Add the extracted title
                     content: event.content.clone(),
                     created_at: event.created_at,
                     emojis,

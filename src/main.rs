@@ -25,8 +25,6 @@ const CONFIG_FILE: &str = "config.json"; // 設定ファイル名
 const DB_PATH: &str = "cache_db";
 const CACHE_DIR: &str = "cache"; // Re-added for migration
 
-const MAX_STATUS_LENGTH: usize = 140; // ステータス最大文字数
-
 async fn migrate_data_from_files(
     cache_db: &LmdbCache,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -167,20 +165,14 @@ impl NostrStatusApp {
             nwc_uri_input: String::new(),
             cache_db: lmdb_cache,
             is_logged_in: false,
-            status_message_input: String::new(),
+            article_title_input: String::new(),
+            article_content_input: String::new(),
             show_post_dialog: false,
             show_emoji_picker: false,
             my_emojis: HashMap::new(),
             secret_key_input: String::new(),
             passphrase_input: String::new(),
             confirm_passphrase_input: String::new(),
-    current_status_type: StatusType::General,
-    show_music_dialog: false,
-    music_track_input: String::new(),
-    music_url_input: String::new(),
-    show_podcast_dialog: false,
-    podcast_episode_input: String::new(),
-    podcast_url_input: String::new(),
             nostr_client: None,
             my_keys: None,
             followed_pubkeys: HashSet::new(),

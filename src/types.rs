@@ -96,6 +96,7 @@ pub struct TimelinePost {
     pub kind: Kind,
     pub author_pubkey: PublicKey,
     pub author_metadata: ProfileMetadata,
+    pub title: String,
     pub content: String,
     pub created_at: Timestamp,
     #[serde(default)]
@@ -116,13 +117,6 @@ pub enum AppTab {
 pub enum AppTheme {
     Light,
     Dark,
-}
-
-#[derive(Debug, PartialEq, Eq, Copy, Clone)]
-pub enum StatusType {
-    General,
-    Music,
-    Podcast,
 }
 
 impl AppTheme {
@@ -159,20 +153,14 @@ pub struct NostrStatusAppInternal {
     pub nwc_uri_input: String,
     pub cache_db: LmdbCache,
     pub is_logged_in: bool,
-    pub status_message_input: String,
+    pub article_title_input: String,
+    pub article_content_input: String,
     pub show_post_dialog: bool,
     pub show_emoji_picker: bool,
     pub my_emojis: HashMap<String, String>,
     pub secret_key_input: String,
     pub passphrase_input: String,
     pub confirm_passphrase_input: String,
-    pub current_status_type: StatusType,
-    pub show_music_dialog: bool,
-    pub music_track_input: String,
-    pub music_url_input: String,
-    pub show_podcast_dialog: bool,
-    pub podcast_episode_input: String,
-    pub podcast_url_input: String,
     pub nostr_client: Option<Client>,
     pub my_keys: Option<Keys>,
     pub followed_pubkeys: HashSet<PublicKey>,

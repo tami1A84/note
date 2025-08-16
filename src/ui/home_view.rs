@@ -1,14 +1,13 @@
 use eframe::egui;
 use std::sync::{Arc, Mutex};
 use std::collections::HashMap;
-use nostr::{EventBuilder, Kind, PublicKey, Tag, nips::nip19::ToBech32, EventId, Timestamp};
+use nostr::{EventBuilder, Kind, PublicKey, Tag, nips::nip19::ToBech32, EventId};
 use regex::Regex;
 
 use crate::{
     types::*,
     nostr_client::{update_contact_list, fetch_timeline_events},
     cache_db::DB_FOLLOWED,
-    MAX_STATUS_LENGTH,
     ui::{image_cache, zap},
 };
 
@@ -21,37 +20,13 @@ fn render_post_content(
 ) {
     let text_color = app_data.current_theme.text_color();
 
-    // Check for music/podcast status
-    let d_tag = post
-        .tags
-        .iter()
-        .find(|t| (*t).clone().to_vec().get(0).map(|s| s.as_str()) == Some("d"));
-
-    if let Some(tag) = d_tag {
-        let tag_vec = tag.clone().to_vec();
-        if tag_vec.get(1).map(|s| s.as_str()) == Some("music") {
-            // Music or Podcast status
-            ui.horizontal(|ui| {
-                ui.label("🎵"); // Use a general music icon for now
-                ui.vertical(|ui| {
-                    ui.label(egui::RichText::new(&post.content).color(text_color));
-                    let r_tag = post
-                        .tags
-                        .iter()
-                        .find(|t| (*t).clone().to_vec().get(0).map(|s| s.as_str()) == Some("r"));
-                    if let Some(r_tag_value) = r_tag.and_then(|t| t.clone().to_vec().get(1).cloned()) {
-                        ui.hyperlink_to(
-                            egui::RichText::new(&r_tag_value).small().color(egui::Color32::GRAY),
-                            r_tag_value,
-                        );
-                    }
-                });
-            });
-            return; // Don't render general content
-        }
+    // Display the article title
+    if !post.title.is_empty() {
+        ui.label(egui::RichText::new(&post.title).heading().strong());
+        ui.add_space(5.0);
     }
 
-    // General status (with emojis)
+    // Display the article content (with emoji support)
     let re = Regex::new(r":(\w+):").unwrap();
     let mut last_end = 0;
 
@@ -121,7 +96,6 @@ pub fn draw_home_view(
 ) {
     let mut urls_to_load: Vec<(String, ImageKind)> = Vec::new();
     let new_post_window_title_text = "新規投稿";
-    let status_input_hint_text = "いまどうしてる？";
     let publish_button_text = "公開";
     let cancel_button_text = "キャンセル";
     let timeline_heading_text = "ホーム";
@@ -248,68 +222,44 @@ pub fn draw_home_view(
                                 app_data.show_emoji_picker = !app_data.show_emoji_picker;
                             }
 
-                            // Music status button
-                            if ui.button("🎵").clicked() {
-                                app_data.show_music_dialog = true;
-                            }
-
-                            // Podcast status button
-                            if ui.button("🎤").clicked() {
-                                app_data.show_podcast_dialog = true;
-                            }
-
-                            let count = app_data.status_message_input.chars().count();
-                            let counter_string = if app_data.current_status_type == StatusType::General {
-                                format!("{}/{}", count, MAX_STATUS_LENGTH)
-                            } else {
-                                format!("{}", count)
-                            };
-                            let mut counter_text = egui::RichText::new(counter_string);
-                            if app_data.current_status_type == StatusType::General && count > MAX_STATUS_LENGTH {
-                                counter_text = counter_text.color(egui::Color32::RED);
-                            }
-                            ui.label(counter_text);
-
-
                             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                                 if ui.button(cancel_button_text).clicked() {
                                     app_data.show_post_dialog = false;
-                                    app_data.current_status_type = StatusType::General;
-                                    app_data.status_message_input.clear();
-                                    app_data.music_track_input.clear();
-                                    app_data.music_url_input.clear();
-                                    app_data.podcast_episode_input.clear();
-                                    app_data.podcast_url_input.clear();
+                                app_data.article_title_input.clear();
+                                app_data.article_content_input.clear();
                                 }
                                 if ui.button(publish_button_text).clicked() && !app_data.is_loading {
-                                    let status_message = app_data.status_message_input.clone();
-                                    let client_clone_nip38_send = app_data.nostr_client.as_ref().unwrap().clone();
-                                    let keys_clone_nip38_send = app_data.my_keys.clone().unwrap();
+                                let article_title = app_data.article_title_input.clone();
+                                let article_content = app_data.article_content_input.clone();
 
-                                    app_data.is_loading = true;
-                                    app_data.should_repaint = true;
-                                    println!("Publishing NIP-38 status...");
-
-                                    if app_data.current_status_type == StatusType::General && status_message.chars().count() > MAX_STATUS_LENGTH {
-                                        eprintln!("Status is too long (max {MAX_STATUS_LENGTH} chars)");
-                                        app_data.is_loading = false;
-                                        app_data.should_repaint = true;
+                                if article_title.is_empty() {
+                                    eprintln!("Title cannot be empty.");
                                         return;
                                     }
+                                if article_content.is_empty() {
+                                    eprintln!("Content cannot be empty.");
+                                    return;
+                                }
 
-                                    let current_status_type = app_data.current_status_type;
-                                    let music_url = app_data.music_url_input.clone();
-                                    let podcast_url = app_data.podcast_url_input.clone();
+                                let client_clone = app_data.nostr_client.as_ref().unwrap().clone();
+                                let keys_clone = app_data.my_keys.clone().unwrap();
+
+                                app_data.is_loading = true;
+                                app_data.should_repaint = true;
+                                println!("Publishing NIP-23 article...");
 
                                     let my_emojis = app_data.my_emojis.clone();
                                     let cloned_app_data_arc = app_data_arc.clone();
                                     runtime_handle.spawn(async move {
                                         let mut tags: Vec<Tag> = Vec::new();
 
-                                        // --- Emoji Tags ---
+                                    // Add the 't' tag for the title, as per NIP-23
+                                    tags.push(Tag::from_standardized(nostr::TagStandard::Title(article_title)));
+
+                                    // Emoji tag processing
                                         let re = Regex::new(r":(\w+):").unwrap();
                                         let mut used_emojis: std::collections::HashSet<String> = std::collections::HashSet::new();
-                                        for cap in re.captures_iter(&status_message) {
+                                    for cap in re.captures_iter(&article_content) {
                                             if let Some(shortcode) = cap.get(1) {
                                                 used_emojis.insert(shortcode.as_str().to_string());
                                             }
@@ -322,51 +272,23 @@ pub fn draw_home_view(
                                             }
                                         }
 
-                                        let d_tag_value = match current_status_type {
-                                            StatusType::General => "general",
-                                            StatusType::Music | StatusType::Podcast => "music",
-                                        };
-                                        tags.push(Tag::identifier(d_tag_value.to_string()));
-
-                                        let r_url = match current_status_type {
-                                            StatusType::Music => music_url,
-                                            StatusType::Podcast => podcast_url,
-                                            _ => String::new(),
-                                        };
-
-                                        if !r_url.is_empty() {
-                                            if let Ok(tag) = Tag::parse(["r", &r_url]) {
-                                                tags.push(tag);
-                                            }
-                                        }
-
-                                        if current_status_type != StatusType::General {
-                                            let expiration_time = chrono::Utc::now().timestamp() + 30 * 60; // 30 minutes
-                                            tags.push(Tag::expiration(Timestamp::from(
-                                                expiration_time as u64,
-                                            )));
-                                        }
-
-                                        let event_result = EventBuilder::new(Kind::from(30315), status_message.clone())
+                                    // Create the NIP-23 event (kind 30023)
+                                    let event_result = EventBuilder::new(Kind::from(30023), article_content)
                                             .tags(tags)
-                                            .sign(&keys_clone_nip38_send)
+                                        .sign(&keys_clone)
                                             .await;
 
                                         match event_result {
-                                            Ok(event) => match client_clone_nip38_send.send_event(&event).await {
+                                        Ok(event) => match client_clone.send_event(&event).await {
                                                 Ok(event_id) => {
-                                                    println!("Status published with event id: {event_id:?}");
+                                                println!("Article published with event id: {event_id:?}");
                                                     let mut data = cloned_app_data_arc.lock().unwrap();
-                                                    data.status_message_input.clear();
-                                                    data.show_post_dialog = false;
-                                                    data.current_status_type = StatusType::General;
-                                                    data.music_track_input.clear();
-                                                    data.music_url_input.clear();
-                                                    data.podcast_episode_input.clear();
-                                                    data.podcast_url_input.clear();
+                                                data.show_post_dialog = false;
+                                                data.article_title_input.clear();
+                                                data.article_content_input.clear();
                                                 }
                                                 Err(e) => {
-                                                    eprintln!("Failed to publish status: {e}");
+                                                eprintln!("Failed to publish article: {e}");
                                                 }
                                             },
                                             Err(e) => {
@@ -383,13 +305,21 @@ pub fn draw_home_view(
                     });
 
                 egui::CentralPanel::default().show_inside(ui, |ui| {
-                    ui.add_space(15.0);
+                    ui.add_space(10.0);
+                    ui.label("タイトル:");
+                    ui.add(
+                        egui::TextEdit::singleline(&mut app_data.article_title_input)
+                            .desired_width(f32::INFINITY)
+                            .hint_text("記事のタイトル"),
+                    );
+                    ui.add_space(5.0);
+                    ui.label("本文:");
                     egui::ScrollArea::vertical().show(ui, |ui| {
                         ui.add(
-                            egui::TextEdit::multiline(&mut app_data.status_message_input)
-                                .desired_rows(5)
+                            egui::TextEdit::multiline(&mut app_data.article_content_input)
+                                .desired_rows(15)
                                 .desired_width(f32::INFINITY)
-                                .hint_text(status_input_hint_text),
+                                .hint_text("記事の内容をMarkdownで記述..."),
                         );
                     });
                 });
@@ -438,7 +368,7 @@ pub fn draw_home_view(
                                     }
 
                                     if response.clicked() {
-                                        app_data.status_message_input.push_str(&format!(":{}:", shortcode));
+                                        app_data.article_content_input.push_str(&format!(":{}:", shortcode));
                                         app_data.show_emoji_picker = false;
                                     }
                                     response.on_hover_text(&format!(":{}:", shortcode));
@@ -453,99 +383,6 @@ pub fn draw_home_view(
         }
     }
 
-    // --- Music Status Dialog ---
-    if app_data.show_music_dialog {
-        egui::Window::new("音楽ステータスを設定")
-            .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
-            .collapsible(false)
-            .resizable(false)
-            .show(ctx, |ui| {
-                ui.vertical_centered_justified(|ui| {
-                    ui.add_space(10.0);
-                    ui.label("曲名");
-                    ui.add(
-                        egui::TextEdit::singleline(&mut app_data.music_track_input)
-                            .desired_width(f32::INFINITY)
-                            .hint_text("Sayonara - Gen Hoshino"),
-                    );
-                    ui.add_space(10.0);
-                    ui.label("URL（任意）");
-                    ui.add(
-                        egui::TextEdit::singleline(&mut app_data.music_url_input)
-                            .desired_width(f32::INFINITY)
-                            .hint_text("spotify:track:39tH2BvK2r9Vv1A25Gf3fB"),
-                    );
-                    ui.add_space(10.0);
-                });
-
-                ui.separator();
-                ui.add_space(5.0);
-
-                ui.horizontal(|ui| {
-                    if ui.button("キャンセル").clicked() {
-                        app_data.show_music_dialog = false;
-                        app_data.music_track_input.clear();
-                        app_data.music_url_input.clear();
-                    }
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if ui.button("ステータスを設定").clicked() {
-                            if !app_data.music_track_input.is_empty() {
-                                app_data.status_message_input = app_data.music_track_input.clone();
-                                app_data.current_status_type = StatusType::Music;
-                                app_data.show_music_dialog = false;
-                            }
-                        }
-                    });
-                });
-            });
-    }
-
-    // --- Podcast Status Dialog ---
-    if app_data.show_podcast_dialog {
-        egui::Window::new("ポッドキャストステータスを設定")
-            .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
-            .collapsible(false)
-            .resizable(false)
-            .show(ctx, |ui| {
-                ui.vertical_centered_justified(|ui| {
-                    ui.add_space(10.0);
-                    ui.label("エピソードのタイトル");
-                    ui.add(
-                        egui::TextEdit::singleline(&mut app_data.podcast_episode_input)
-                            .desired_width(f32::INFINITY)
-                            .hint_text("コジ10 小島秀夫の『最高の10時にしよう』"),
-                    );
-                    ui.add_space(10.0);
-                    ui.label("URL（任意）");
-                    ui.add(
-                        egui::TextEdit::singleline(&mut app_data.podcast_url_input)
-                            .desired_width(f32::INFINITY)
-                            .hint_text("https://open.spotify.com/episode/..."),
-                    );
-                    ui.add_space(10.0);
-                });
-
-                ui.separator();
-                ui.add_space(5.0);
-
-                ui.horizontal(|ui| {
-                    if ui.button("キャンセル").clicked() {
-                        app_data.show_podcast_dialog = false;
-                        app_data.podcast_episode_input.clear();
-                        app_data.podcast_url_input.clear();
-                    }
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if ui.button("ステータスを設定").clicked() {
-                            if !app_data.podcast_episode_input.is_empty() {
-                                app_data.status_message_input = app_data.podcast_episode_input.clone();
-                                app_data.current_status_type = StatusType::Podcast;
-                                app_data.show_podcast_dialog = false;
-                            }
-                        }
-                    });
-                });
-            });
-    }
 
     card_frame.show(ui, |ui| {
         ui.horizontal(|ui| {

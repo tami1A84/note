@@ -225,7 +225,8 @@ pub fn draw_profile_view(
                     app_data.followed_pubkeys.clear();
                     app_data.followed_pubkeys_display.clear();
                     app_data.timeline_posts.clear();
-                    app_data.status_message_input.clear();
+                    app_data.article_title_input.clear();
+                    app_data.article_content_input.clear();
                     app_data.passphrase_input.clear();
                     app_data.confirm_passphrase_input.clear();
                     app_data.secret_key_input.clear();
