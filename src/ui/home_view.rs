@@ -237,13 +237,14 @@ pub fn draw_home_view(
                 let followed_pubkeys = app_data.followed_pubkeys.clone();
                 let discover_relays = app_data.discover_relays_editor.clone();
                 let my_keys = app_data.my_keys.clone().unwrap();
+                let cache_db_clone = app_data.cache_db.clone();
 
                 app_data.is_loading = true;
                 app_data.should_repaint = true;
 
                 let cloned_app_data_arc = app_data_arc.clone();
                 runtime_handle.spawn(async move {
-                    let timeline_result = fetch_timeline_events(&my_keys, &discover_relays, &followed_pubkeys).await;
+                    let timeline_result = fetch_timeline_events(&my_keys, &discover_relays, &followed_pubkeys, &cache_db_clone).await;
 
                     let mut app_data_async = cloned_app_data_arc.lock().unwrap();
                     app_data_async.is_loading = false;
@@ -301,7 +302,7 @@ pub fn draw_home_view(
                         for post in &app_data.timeline_posts {
                             // Placeholder filter logic
                             let display_post = match &app_data.selected_label {
-                                Some(label) if label != "すべて" => post.title.contains(label) || post.content.contains(label),
+                                Some(label) if label != "すべて" => post.title.contains(label) || post.summary.contains(label),
                                 _ => true, // Show all for "すべて" or None
                             };
 
@@ -373,19 +374,14 @@ pub fn draw_home_view(
                                             ui.label(egui::RichText::new(&post.title).strong());
                                         }
 
-                                        let snippet = if post.content.chars().count() > 80 {
-                                            let mut truncated: String = post.content.chars().take(80).collect();
-                                            truncated.push_str("...");
-                                            truncated
-                                        } else {
-                                            post.content.clone()
-                                        };
-                                        ui.label(snippet);
+                                        // The summary is already truncated, so we can just display it.
+                                        ui.label(&post.summary);
                                     });
                                 });
 
                                 if card_response.response.interact(egui::Sense::click()).clicked() {
-                                    app_data.viewing_article = Some(post.clone());
+                                    app_data.viewing_article_id = Some(post.id);
+                                    app_data.viewing_article = None; // Clear previous article
                                     app_data.current_tab = AppTab::ArticleView;
                                 }
                             }

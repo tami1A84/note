@@ -52,9 +52,18 @@ pub fn draw_article_view(
         });
 
     } else {
-        // This case should ideally not be reached if logic is correct
-        ui.label("No article selected.");
-        if ui.button("Go Home").clicked() {
+        // Article is being loaded, show a spinner
+        ui.vertical_centered(|ui| {
+            ui.add_space(ui.available_height() / 2.0 - 20.0); // Center vertically
+            ui.spinner();
+            ui.add_space(10.0);
+            ui.label("記事を読み込んでいます...");
+        });
+
+        // Also provide a way to go back if it gets stuck
+        if ui.button("← Back").clicked() {
+            app_data.viewing_article_id = None;
+            app_data.viewing_article = None;
             app_data.current_tab = AppTab::Home;
         }
     }

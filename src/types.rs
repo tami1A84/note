@@ -95,6 +95,19 @@ pub struct TimelinePost {
     pub author_pubkey: PublicKey,
     pub author_metadata: ProfileMetadata,
     pub title: String,
+    pub summary: String,
+    pub created_at: Timestamp,
+    #[serde(default)]
+    pub tags: Vec<nostr::Tag>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ArticleFull {
+    pub id: EventId,
+    pub kind: Kind,
+    pub author_pubkey: PublicKey,
+    pub author_metadata: ProfileMetadata,
+    pub title: String,
     pub content: String,
     pub created_at: Timestamp,
     #[serde(default)]
@@ -187,7 +200,8 @@ pub struct NostrStatusAppInternal {
     pub zap_amount_input: String,
     pub zap_target_post: Option<TimelinePost>,
     // Article View
-    pub viewing_article: Option<TimelinePost>,
+    pub viewing_article_id: Option<EventId>,
+    pub viewing_article: Option<ArticleFull>,
     // UI State
     pub show_profile_menu: bool,
     pub commonmark_cache: CommonMarkCache,

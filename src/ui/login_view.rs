@@ -108,7 +108,7 @@ async fn fetch_fresh_data_from_network(
         cache_db.write_cache(DB_FOLLOWED, &pubkey_hex, &followed_pubkeys)?;
     }
 
-    let timeline_posts = fetch_timeline_events(keys, discover_relays, &followed_pubkeys).await?;
+    let timeline_posts = fetch_timeline_events(keys, discover_relays, &followed_pubkeys, cache_db).await?;
     cache_db.write_cache(DB_TIMELINE, &pubkey_hex, &timeline_posts)?;
 
     let (profile_metadata, profile_json_string) =

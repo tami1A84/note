@@ -4,7 +4,10 @@ use nostr_sdk::{Client, ClientOptions as Options, SubscribeAutoCloseOptions};
 use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 
-use crate::types::{ProfileMetadata, TimelinePost};
+use crate::{
+    cache_db::{LmdbCache, DB_ARTICLES},
+    types::{ArticleFull, ProfileMetadata, TimelinePost},
+};
 
 // NIP-65とフォールバックを考慮したリレー接続関数
 pub async fn connect_to_relays_with_nip65(
@@ -347,6 +350,7 @@ pub async fn fetch_timeline_events(
     keys: &Keys,
     discover_relays: &str,
     followed_pubkeys: &HashSet<PublicKey>,
+    cache_db: &LmdbCache,
 ) -> Result<Vec<TimelinePost>, Box<dyn std::error::Error + Send + Sync>> {
     let mut timeline_posts = Vec::new();
     if followed_pubkeys.is_empty() {
@@ -404,13 +408,39 @@ pub async fn fetch_timeline_events(
                     }
                 }).unwrap_or_default();
 
+                // Create the full article object for caching
+                let full_article = ArticleFull {
+                    id: event.id,
+                    kind: event.kind,
+                    author_pubkey: event.pubkey,
+                    author_metadata: profiles.get(&event.pubkey).cloned().unwrap_or_default(),
+                    title: title.clone(),
+                    content: event.content.clone(),
+                    created_at: event.created_at,
+                    tags: event.tags.clone().to_vec(),
+                };
+
+                // Cache the full article
+                if let Err(e) = cache_db.write_cache(DB_ARTICLES, &event.id.to_hex(), &full_article) {
+                    eprintln!("Failed to write article cache for {}: {}", event.id.to_hex(), e);
+                }
+
+                // Create a summary for the timeline view
+                let summary = if event.content.chars().count() > 200 {
+                    let mut truncated: String = event.content.chars().take(200).collect();
+                    truncated.push_str("...");
+                    truncated
+                } else {
+                    event.content.clone()
+                };
+
                 timeline_posts.push(TimelinePost {
                     id: event.id,
                     kind: event.kind,
                     author_pubkey: event.pubkey,
                     author_metadata: profiles.get(&event.pubkey).cloned().unwrap_or_default(),
-                    title, // Add the extracted title
-                    content: event.content.clone(),
+                    title,
+                    summary, // Use summary instead of full content
                     created_at: event.created_at,
                     tags: event.tags.to_vec(),
                 });
@@ -420,4 +450,59 @@ pub async fn fetch_timeline_events(
         temp_fetch_client.shutdown().await;
     }
     Ok(timeline_posts)
+}
+
+pub async fn fetch_article(
+    cache_db: &LmdbCache,
+    client: &Client,
+    event_id: nostr::EventId,
+) -> Result<ArticleFull, Box<dyn std::error::Error + Send + Sync>> {
+    // 1. Try to get from cache first
+    let key = event_id.to_hex();
+    if let Ok(cached_data) = cache_db.read_cache::<ArticleFull>(DB_ARTICLES, &key) {
+        if !cached_data.is_expired() {
+            println!("Article {} loaded from cache.", key);
+            return Ok(cached_data.data);
+        }
+    }
+
+    // 2. If not in cache or expired, fetch from network
+    println!("Article {} not in cache or expired, fetching from network.", key);
+    let filter = Filter::new().id(event_id).limit(1);
+    let events = client
+        .fetch_events(filter, Duration::from_secs(10))
+        .await?;
+
+    if let Some(event) = events.first() {
+        // We need author metadata as well
+        let author_metadata = get_profile_metadata(event.pubkey, client).await?;
+
+        let title = event.tags.iter().find_map(|tag| {
+            if let Some(nostr::TagStandard::Title(title)) = tag.as_standardized() {
+                Some(title.clone())
+            } else {
+                None
+            }
+        }).unwrap_or_default();
+
+        let full_article = ArticleFull {
+            id: event.id,
+            kind: event.kind,
+            author_pubkey: event.pubkey,
+            author_metadata,
+            title,
+            content: event.content.clone(),
+            created_at: event.created_at,
+            tags: event.tags.clone().to_vec(),
+        };
+
+        // 3. Save the newly fetched article to cache
+        if let Err(e) = cache_db.write_cache(DB_ARTICLES, &key, &full_article) {
+            eprintln!("Failed to write article cache for {}: {}", key, e);
+        }
+
+        Ok(full_article)
+    } else {
+        Err("Article not found on network.".into())
+    }
 }
