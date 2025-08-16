@@ -1,5 +1,4 @@
 mod cache_db;
-mod emoji_loader;
 mod nip49;
 mod nostr_client;
 mod ui;
@@ -18,6 +17,7 @@ mod theme;
 
 use crate::cache_db::{LmdbCache, DB_FOLLOWED, DB_PROFILES, DB_RELAYS};
 use crate::types::*;
+use egui_commonmark::CommonMarkCache;
 
 
 const CONFIG_FILE: &str = "config.json"; // 設定ファイル名
@@ -168,8 +168,6 @@ impl NostrStatusApp {
             article_title_input: String::new(),
             article_content_input: String::new(),
             show_post_dialog: false,
-            show_emoji_picker: false,
-            my_emojis: HashMap::new(),
             secret_key_input: String::new(),
             passphrase_input: String::new(),
             confirm_passphrase_input: String::new(),
@@ -206,6 +204,7 @@ impl NostrStatusApp {
             zap_target_post: None,
             viewing_article: None,
             show_profile_menu: false,
+            commonmark_cache: CommonMarkCache::default(),
         };
         let data = Arc::new(Mutex::new(app_data_internal));
 

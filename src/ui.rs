@@ -38,7 +38,7 @@ impl eframe::App for NostrStatusApp {
                 ui.add_space(5.0);
 
                 ui.horizontal(|ui| {
-                    ui.heading("長文ノート");
+                    ui.heading("note");
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         let (icon, new_theme) = match app_data.current_theme {
                             AppTheme::Light => ("☀️", AppTheme::Dark),
@@ -206,7 +206,6 @@ impl eframe::App for NostrStatusApp {
                 if let Ok(mut dynamic_image) = image::load_from_memory(&image_bytes) {
                     let (width, height) = match kind {
                         ImageKind::Avatar => (32, 32),
-                        ImageKind::Emoji => (20, 20),
                         ImageKind::ProfilePicture => (100, 100),
                     };
                     dynamic_image = dynamic_image.thumbnail(width, height);
@@ -245,7 +244,6 @@ impl eframe::App for NostrStatusApp {
                                 Ok(mut dynamic_image) => {
                                     let (width, height) = match kind {
                                         ImageKind::Avatar => (32, 32),
-                                        ImageKind::Emoji => (20, 20),
                                         ImageKind::ProfilePicture => (100, 100),
                                     };
                                     dynamic_image = dynamic_image.thumbnail(width, height);

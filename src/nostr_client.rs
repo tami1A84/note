@@ -395,20 +395,6 @@ pub async fn fetch_timeline_events(
             }
 
             for event in status_events {
-                let emojis = event
-                    .tags
-                    .iter()
-                    .filter_map(|tag| {
-                        if let Some(nostr::TagStandard::Emoji { shortcode, url }) =
-                            tag.as_standardized()
-                        {
-                            Some((shortcode.to_string(), url.to_string()))
-                        } else {
-                            None
-                        }
-                    })
-                    .collect();
-
                 // Extract title from 't' tag for NIP-23
                 let title = event.tags.iter().find_map(|tag| {
                     if let Some(nostr::TagStandard::Title(title)) = tag.as_standardized() {
@@ -426,7 +412,6 @@ pub async fn fetch_timeline_events(
                     title, // Add the extracted title
                     content: event.content.clone(),
                     created_at: event.created_at,
-                    emojis,
                     tags: event.tags.to_vec(),
                 });
             }

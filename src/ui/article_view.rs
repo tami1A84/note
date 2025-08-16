@@ -1,6 +1,7 @@
 use eframe::egui;
 use std::sync::{Arc, Mutex};
 use nostr::prelude::ToBech32;
+use egui_commonmark::CommonMarkViewer;
 
 use crate::types::*;
 
@@ -47,8 +48,7 @@ pub fn draw_article_view(
             ui.add_space(15.0);
 
             // Full Content
-            // For now, just a simple label. Could be extended with Markdown rendering.
-            ui.label(&post.content);
+            CommonMarkViewer::new().show(ui, &mut app_data.commonmark_cache, &post.content);
         });
 
     } else {
