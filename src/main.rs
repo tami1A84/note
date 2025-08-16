@@ -202,6 +202,7 @@ impl NostrStatusApp {
             show_zap_dialog: false,
             zap_amount_input: String::new(),
             zap_target_post: None,
+            viewing_article_id: None,
             viewing_article: None,
             show_profile_menu: false,
             commonmark_cache: CommonMarkCache::default(),

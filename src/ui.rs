@@ -15,9 +15,46 @@ use crate::{
     types::*,
 };
 
+use crate::nostr_client;
+
 impl eframe::App for NostrStatusApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let mut app_data = self.data.lock().unwrap();
+
+        // --- Article Fetching Logic ---
+        if let Some(event_id) = app_data.viewing_article_id {
+            if app_data.viewing_article.is_none() && !app_data.is_loading {
+                app_data.is_loading = true;
+                app_data.should_repaint = true;
+
+                let app_data_arc = self.data.clone();
+                let runtime = self.runtime.handle().clone();
+                runtime.spawn(async move {
+                    let (cache_db, client) = {
+                        let data = app_data_arc.lock().unwrap();
+                        (data.cache_db.clone(), data.nostr_client.as_ref().unwrap().clone())
+                    };
+
+                    let result = nostr_client::fetch_article(&cache_db, &client, event_id).await;
+
+                    let mut data = app_data_arc.lock().unwrap();
+                    match result {
+                        Ok(article) => {
+                            data.viewing_article = Some(article);
+                        }
+                        Err(e) => {
+                            eprintln!("Failed to fetch article: {}", e);
+                            // Optionally, reset the view or show an error
+                            data.viewing_article_id = None;
+                            data.current_tab = AppTab::Home;
+                        }
+                    }
+                    data.is_loading = false;
+                    data.should_repaint = true;
+                });
+            }
+        }
+
 
         let home_tab_text = "ホーム";
 
